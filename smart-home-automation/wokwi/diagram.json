@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "author": "Smart Home Automation Project",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-arduino-uno", "id": "uno", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-dht22", "id": "dht1", "top": -80, "left": 200, "attrs": {} },
+    { "type": "wokwi-photoresistor-sensor", "id": "ldr1", "top": -80, "left": 320, "attrs": {} },
+    { "type": "wokwi-pir-motion-sensor", "id": "pir1", "top": -160, "left": 200, "attrs": {} },
+    { "type": "wokwi-lcd1602", "id": "lcd1", "top": -200, "left": 400, "attrs": { "pins": "i2c" } },
+    { "type": "wokwi-buzzer", "id": "buzzer1", "top": 40, "left": 400, "attrs": {} },
+    { "type": "wokwi-relay-module", "id": "relay1", "top": 120, "left": 200, "attrs": {} },
+    { "type": "wokwi-relay-module", "id": "relay2", "top": 120, "left": 320, "attrs": {} },
+    { "type": "wokwi-pushbutton", "id": "btn1", "top": 40, "left": 0, "attrs": {} },
+    { "type": "wokwi-resistor", "id": "r1", "top": -60, "left": 340, "attrs": { "value": "10000" } }
+  ],
+  "connections": [
+    [ "uno:2", "dht1:SDA", "green", [] ],
+    [ "uno:5V", "dht1:VCC", "red", [] ],
+    [ "uno:GND.1", "dht1:GND", "black", [] ],
+    [ "uno:A0", "ldr1:AO", "yellow", [] ],
+    [ "uno:5V", "ldr1:VCC", "red", [] ],
+    [ "uno:GND.1", "ldr1:GND", "black", [] ],
+    [ "uno:3", "pir1:OUT", "green", [] ],
+    [ "uno:5V", "pir1:VCC", "red", [] ],
+    [ "uno:GND.1", "pir1:GND", "black", [] ],
+    [ "uno:4", "relay1:IN", "green", [] ],
+    [ "uno:5", "relay2:IN", "green", [] ],
+    [ "uno:5V", "relay1:VCC", "red", [] ],
+    [ "uno:5V", "relay2:VCC", "red", [] ],
+    [ "uno:GND.1", "relay1:GND", "black", [] ],
+    [ "uno:GND.1", "relay2:GND", "black", [] ],
+    [ "uno:6", "buzzer1:1", "green", [] ],
+    [ "uno:GND.1", "buzzer1:2", "black", [] ],
+    [ "uno:7", "btn1:1.l", "green", [] ],
+    [ "uno:GND.1", "btn1:2.l", "black", [] ],
+    [ "uno:SDA", "lcd1:SDA", "blue", [] ],
+    [ "uno:SCL", "lcd1:SCL", "yellow", [] ],
+    [ "uno:5V", "lcd1:VCC", "red", [] ],
+    [ "uno:GND.1", "lcd1:GND", "black", [] ]
+  ],
+  "dependencies": {}
+}

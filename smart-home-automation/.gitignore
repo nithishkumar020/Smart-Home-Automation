@@ -1,0 +1,16 @@
+# Arduino / PlatformIO build artifacts
+build/
+.pio/
+*.hex
+*.elf
+
+# Wokwi
+wokwi/build/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
