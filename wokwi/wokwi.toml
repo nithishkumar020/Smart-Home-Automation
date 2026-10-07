@@ -1,4 +1,0 @@
-[wokwi]
-version = 1
-firmware = '../src/smart_home.ino'
-elf = 'build/smart_home.ino.elf'

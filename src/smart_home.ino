@@ -1,130 +1,173 @@
-/*
- * Smart Home Automation System
- * ------------------------------
- * Subsystems:
- *   1. Lighting control  - LDR + PIR -> auto light ON/OFF
- *   2. Temperature control - DHT sensor -> fan relay
- *   3. Security           - PIR + buzzer -> intrusion alert (Away mode)
- *
- * Board: Arduino Uno / Mega
- * Also runs unmodified in Wokwi (https://wokwi.com) simulation.
- *
- * License: MIT
- */
-
-#include <DHT.h>
+#include <Arduino.h>
+#include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include <DHT.h>
 
-// ---------- Pin definitions ----------
-#define DHTPIN        2
-#define DHTTYPE       DHT22      // change to DHT11 if that's what you have
-#define LDR_PIN       A0
-#define PIR_PIN       3
-#define LIGHT_RELAY   4
-#define FAN_RELAY     5
-#define BUZZER        6
-#define MODE_BUTTON   7          // toggles HOME / AWAY mode
+// ---------- PIN MAP (change to match your diagram.json / circuit.md) ----------
+#define DHT_PIN     2
+#define PIR_PIN     3
+#define RELAY_LIGHT 4
+#define RELAY_FAN   5
+#define BUZZER_PIN  6
+#define BUTTON_PIN  7
+#define LDR_PIN     A0
 
-// ---------- Thresholds (tune to your hardware) ----------
-const int   TEMP_THRESHOLD = 30;    // deg C, fan ON above this
-const int   LDR_THRESHOLD  = 400;   // analogRead value, lower = darker
+#define DHT_TYPE    DHT22      // use DHT11 if your diagram uses DHT11
 
-// ---------- State machine ----------
-enum SystemMode { HOME, AWAY, ALARM };
-SystemMode currentMode = HOME;
+// ---------- SETTINGS ----------
+#define LCD_ADDR        0x27   // try 0x3F if the LCD stays blank
+#define TEMP_THRESHOLD  30.0   // fan ON above this (deg C)
+#define LDR_THRESHOLD   500    // light level split between dark and bright
+#define LDR_DARK_IS_HIGH 0     // set to 1 if your LDR reads HIGH in the dark
+#define RELAY_ON        LOW    // set to HIGH if your relay is active-high
+#define RELAY_OFF       HIGH
+#define LIGHT_HOLD_MS   5000   // keep light on this long after last motion
 
-DHT dht(DHTPIN, DHTTYPE);
-LiquidCrystal_I2C lcd(0x27, 16, 2);   // change address to 0x3F if LCD is blank
+enum Mode { HOME, AWAY, ALARM };
 
-bool lastButtonState = HIGH;
+DHT dht(DHT_PIN, DHT_TYPE);
+LiquidCrystal_I2C lcd(LCD_ADDR, 16, 2);
+
+Mode mode = HOME;
+float temperature = 0;
+bool motion = false;
+bool lightOn = false;
+bool fanOn = false;
+
+unsigned long lastMotion = 0;
+unsigned long lastDht = 0;
+unsigned long lastLcd = 0;
+unsigned long lastBtn = 0;
+bool lastBtnState = HIGH;
+
+bool isDark() {
+  int v = analogRead(LDR_PIN);
+#if LDR_DARK_IS_HIGH
+  return v > LDR_THRESHOLD;
+#else
+  return v < LDR_THRESHOLD;
+#endif
+}
+
+void setLight(bool on) {
+  lightOn = on;
+  digitalWrite(RELAY_LIGHT, on ? RELAY_ON : RELAY_OFF);
+}
+
+void setFan(bool on) {
+  fanOn = on;
+  digitalWrite(RELAY_FAN, on ? RELAY_ON : RELAY_OFF);
+}
+
+void handleButton() {
+  bool state = digitalRead(BUTTON_PIN);
+  if (state == LOW && lastBtnState == HIGH && millis() - lastBtn > 250) {
+    lastBtn = millis();
+    if (mode == HOME)       mode = AWAY;
+    else                    mode = HOME;   // AWAY or ALARM -> HOME
+    noTone(BUZZER_PIN);
+    if (mode == AWAY) setLight(false);
+    lcd.clear();
+    Serial.print("Mode: ");
+    Serial.println(mode == HOME ? "HOME" : "AWAY");
+  }
+  lastBtnState = state;
+}
+
+void updateLcd() {
+  lcd.setCursor(0, 0);
+  lcd.print("T:");
+  if (isnan(temperature)) lcd.print("--.-");
+  else lcd.print(temperature, 1);
+  lcd.print("C M:");
+  lcd.print(motion ? "Y" : "N");
+  lcd.print(" ");
+
+  lcd.setCursor(0, 1);
+  if (mode == HOME)       lcd.print("HOME ");
+  else if (mode == AWAY)  lcd.print("AWAY ");
+  else                    lcd.print("ALARM");
+  lcd.print(" L:");
+  lcd.print(lightOn ? "ON " : "OFF");
+  lcd.print(" F:");
+  lcd.print(fanOn ? "1" : "0");
+}
 
 void setup() {
   Serial.begin(9600);
+
+  pinMode(PIR_PIN, INPUT);
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  pinMode(RELAY_LIGHT, OUTPUT);
+  pinMode(RELAY_FAN, OUTPUT);
+  pinMode(BUZZER_PIN, OUTPUT);
+
+  setLight(false);
+  setFan(false);
+
   dht.begin();
   lcd.init();
   lcd.backlight();
-
-  pinMode(PIR_PIN, INPUT);
-  pinMode(MODE_BUTTON, INPUT_PULLUP);
-  pinMode(LIGHT_RELAY, OUTPUT);
-  pinMode(FAN_RELAY, OUTPUT);
-  pinMode(BUZZER, OUTPUT);
-
-  digitalWrite(LIGHT_RELAY, LOW);
-  digitalWrite(FAN_RELAY, LOW);
-  digitalWrite(BUZZER, LOW);
-
   lcd.setCursor(0, 0);
-  lcd.print("Smart Home Sys");
+  lcd.print("Smart Home");
+  lcd.setCursor(0, 1);
+  lcd.print("Starting...");
   delay(1500);
   lcd.clear();
+
+  Serial.println("Smart Home Automation started");
 }
 
 void loop() {
-  handleModeButton();
+  handleButton();
 
-  float temp        = dht.readTemperature();
-  int   lightLevel  = analogRead(LDR_PIN);
-  int   motion      = digitalRead(PIR_PIN);
+  motion = digitalRead(PIR_PIN) == HIGH;
+  if (motion) lastMotion = millis();
 
-  handleLighting(motion, lightLevel);
-  handleTemperature(temp);
-  handleSecurity(motion);
-  updateDisplay(temp, motion);
-
-  delay(500);
-}
-
-// Debounced button press toggles HOME <-> AWAY
-void handleModeButton() {
-  bool reading = digitalRead(MODE_BUTTON);
-  if (reading == LOW && lastButtonState == HIGH) {
-    currentMode = (currentMode == HOME) ? AWAY : HOME;
-    digitalWrite(BUZZER, LOW); // clear any alarm on mode change
-    delay(200); // simple debounce
+  // Read temperature every 2 seconds
+  if (millis() - lastDht > 2000) {
+    lastDht = millis();
+    float t = dht.readTemperature();
+    if (!isnan(t)) temperature = t;
+    Serial.print("Temp: ");
+    Serial.print(temperature);
+    Serial.print(" C | Motion: ");
+    Serial.print(motion);
+    Serial.print(" | Dark: ");
+    Serial.println(isDark());
   }
-  lastButtonState = reading;
-}
 
-void handleLighting(int motion, int lightLevel) {
-  if (currentMode == AWAY) {
-    digitalWrite(LIGHT_RELAY, LOW); // lights off while away
-    return;
+  switch (mode) {
+    case HOME:
+      // Light: motion recently detected AND dark
+      if (isDark() && (millis() - lastMotion < LIGHT_HOLD_MS) && lastMotion != 0)
+        setLight(true);
+      else
+        setLight(false);
+      // Fan: temperature based
+      setFan(temperature > TEMP_THRESHOLD);
+      noTone(BUZZER_PIN);
+      break;
+
+    case AWAY:
+      setLight(false);
+      setFan(false);
+      if (motion) {
+        mode = ALARM;
+        lcd.clear();
+        Serial.println("INTRUSION! ALARM");
+      }
+      break;
+
+    case ALARM:
+      setLight(true);
+      tone(BUZZER_PIN, 1000);
+      break;
   }
-  if (motion == HIGH && lightLevel < LDR_THRESHOLD) {
-    digitalWrite(LIGHT_RELAY, HIGH);
-  } else {
-    digitalWrite(LIGHT_RELAY, LOW);
-  }
-}
 
-void handleTemperature(float temp) {
-  if (!isnan(temp) && temp > TEMP_THRESHOLD) {
-    digitalWrite(FAN_RELAY, HIGH);
-  } else {
-    digitalWrite(FAN_RELAY, LOW);
-  }
-}
-
-void handleSecurity(int motion) {
-  if (currentMode == AWAY && motion == HIGH) {
-    currentMode = ALARM;
-  }
-  digitalWrite(BUZZER, currentMode == ALARM ? HIGH : LOW);
-}
-
-void updateDisplay(float temp, int motion) {
-  lcd.setCursor(0, 0);
-  lcd.print("T:");
-  lcd.print(isnan(temp) ? 0 : temp, 1);
-  lcd.print("C M:");
-  lcd.print(motion ? "Y" : "N");
-  lcd.print("   ");
-
-  lcd.setCursor(0, 1);
-  switch (currentMode) {
-    case HOME:  lcd.print("Mode: HOME    "); break;
-    case AWAY:  lcd.print("Mode: AWAY    "); break;
-    case ALARM: lcd.print("** INTRUDER **"); break;
+  if (millis() - lastLcd > 300) {
+    lastLcd = millis();
+    updateLcd();
   }
 }
+

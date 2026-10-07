@@ -11,8 +11,7 @@
     { "type": "wokwi-buzzer", "id": "buzzer1", "top": 40, "left": 400, "attrs": {} },
     { "type": "wokwi-relay-module", "id": "relay1", "top": 120, "left": 200, "attrs": {} },
     { "type": "wokwi-relay-module", "id": "relay2", "top": 120, "left": 320, "attrs": {} },
-    { "type": "wokwi-pushbutton", "id": "btn1", "top": 40, "left": 0, "attrs": {} },
-    { "type": "wokwi-resistor", "id": "r1", "top": -60, "left": 340, "attrs": { "value": "10000" } }
+    { "type": "wokwi-pushbutton", "id": "btn1", "top": 40, "left": 0, "attrs": {} }
   ],
   "connections": [
     [ "uno:2", "dht1:SDA", "green", [] ],
@@ -30,12 +29,12 @@
     [ "uno:5V", "relay2:VCC", "red", [] ],
     [ "uno:GND.1", "relay1:GND", "black", [] ],
     [ "uno:GND.1", "relay2:GND", "black", [] ],
-    [ "uno:6", "buzzer1:1", "green", [] ],
-    [ "uno:GND.1", "buzzer1:2", "black", [] ],
+    [ "uno:6", "buzzer1:2", "green", [] ],
+    [ "uno:GND.1", "buzzer1:1", "black", [] ],
     [ "uno:7", "btn1:1.l", "green", [] ],
     [ "uno:GND.1", "btn1:2.l", "black", [] ],
-    [ "uno:SDA", "lcd1:SDA", "blue", [] ],
-    [ "uno:SCL", "lcd1:SCL", "yellow", [] ],
+    [ "uno:A4", "lcd1:SDA", "blue", [] ],
+    [ "uno:A5", "lcd1:SCL", "yellow", [] ],
     [ "uno:5V", "lcd1:VCC", "red", [] ],
     [ "uno:GND.1", "lcd1:GND", "black", [] ]
   ],
