@@ -2,6 +2,7 @@
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <DHT.h>
+#include <Servo.h>
 
 // ---------- PIN MAP (change to match your diagram.json / circuit.md) ----------
 #define DHT_PIN     2
@@ -11,6 +12,7 @@
 #define BUZZER_PIN  6
 #define BUTTON_PIN  7
 #define LDR_PIN     A0
+#define SERVO_PIN   9      // servo acts as the rotating fan
 
 #define DHT_TYPE    DHT22      // use DHT11 if your diagram uses DHT11
 
@@ -18,15 +20,19 @@
 #define LCD_ADDR        0x27   // try 0x3F if the LCD stays blank
 #define TEMP_THRESHOLD  30.0   // fan ON above this (deg C)
 #define LDR_THRESHOLD   500    // light level split between dark and bright
-#define LDR_DARK_IS_HIGH 0     // set to 1 if your LDR reads HIGH in the dark
-#define RELAY_ON        LOW    // set to HIGH if your relay is active-high
-#define RELAY_OFF       HIGH
+#define LDR_DARK_IS_HIGH 1    // set to 1 if your LDR reads HIGH in the dark
+#define RELAY_ON        HIGH
+#define RELAY_OFF       LOW
 #define LIGHT_HOLD_MS   5000   // keep light on this long after last motion
 
 enum Mode { HOME, AWAY, ALARM };
 
 DHT dht(DHT_PIN, DHT_TYPE);
 LiquidCrystal_I2C lcd(LCD_ADDR, 16, 2);
+Servo fanServo;
+int fanAngle = 0;
+int fanStep = 6;
+unsigned long lastFanMove = 0;
 
 Mode mode = HOME;
 float temperature = 0;
@@ -57,6 +63,19 @@ void setLight(bool on) {
 void setFan(bool on) {
   fanOn = on;
   digitalWrite(RELAY_FAN, on ? RELAY_ON : RELAY_OFF);
+}
+
+// Sweeps the servo back and forth while the fan is ON (visual "rotation")
+void animateFan() {
+  if (!fanOn) return;
+  if (millis() - lastFanMove < 20) return;
+  lastFanMove = millis();
+  fanAngle += fanStep;
+  if (fanAngle >= 180 || fanAngle <= 0) {
+    fanStep = -fanStep;
+    fanAngle = constrain(fanAngle, 0, 180);
+  }
+  fanServo.write(fanAngle);
 }
 
 void handleButton() {
@@ -105,6 +124,8 @@ void setup() {
   setLight(false);
   setFan(false);
 
+  fanServo.attach(SERVO_PIN);
+  fanServo.write(0);
   dht.begin();
   lcd.init();
   lcd.backlight();
@@ -164,6 +185,8 @@ void loop() {
       tone(BUZZER_PIN, 1000);
       break;
   }
+
+  animateFan();
 
   if (millis() - lastLcd > 300) {
     lastLcd = millis();
